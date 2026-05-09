@@ -95,7 +95,7 @@ export class RootController {
                     link = data;
                 } else if (data && typeof data === 'object') {
                     const payload = data as Record<string, unknown>;
-                    link = payload.url ?? payload.link ?? payload.result;
+                    link = payload.encrypted_link ?? payload.url ?? payload.link ?? payload.result;
                 }
             } catch {
                 link = rawResponse.trim();
