@@ -17,6 +17,7 @@ import {
 import { notifications } from '@mantine/notifications'
 import { useClipboard } from '@mantine/hooks'
 import { useState } from 'react'
+import { joinURL } from 'ufo'
 import clsx from 'clsx'
 
 import { constructSubscriptionUrl } from '@shared/utils/construct-subscription-url'
@@ -34,7 +35,6 @@ export type TBlockVariant = 'accordion' | 'cards' | 'minimal' | 'timeline'
 
 const HAPP_CRYPT5_BUTTON_TYPES = new Set(['HAPP_CRYPT5_LINK', 'happCrypt5Link'])
 const HAPP_CRYPT5_TEMPLATE = '{{HAPP_CRYPT5_LINK}}'
-const HAPP_CRYPT5_API_URL = 'https://crypto.happ.su/api-v2.php'
 
 interface IProps {
     BlockRenderer: React.ComponentType<IBlockRendererProps>
@@ -55,8 +55,8 @@ function getButtonLinkTemplate(button: TSubscriptionPageButtonConfig): string | 
     return undefined
 }
 
-async function createHappCrypt5Link(url: string): Promise<string> {
-    const response = await fetch(HAPP_CRYPT5_API_URL, {
+async function createHappCrypt5Link(apiUrl: string, url: string): Promise<string> {
+    const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -65,37 +65,21 @@ async function createHappCrypt5Link(url: string): Promise<string> {
     })
 
     if (!response.ok) {
-        throw new Error(`Happ crypt5 API responded with ${response.status}`)
+        throw new Error(`Happ crypt5 proxy responded with ${response.status}`)
     }
 
-    const contentType = response.headers.get('content-type')
+    const data: unknown = await response.json()
 
-    if (contentType?.includes('application/json')) {
-        const data: unknown = await response.json()
+    if (data && typeof data === 'object') {
+        const payload = data as Record<string, unknown>
+        const link = payload.link
 
-        if (typeof data === 'string') {
-            return data
+        if (typeof link === 'string' && link.startsWith('happ://crypt5/')) {
+            return link
         }
-
-        if (data && typeof data === 'object') {
-            const payload = data as Record<string, unknown>
-            const encryptedUrl = payload.url ?? payload.link ?? payload.result
-
-            if (typeof encryptedUrl === 'string') {
-                return encryptedUrl
-            }
-        }
-
-        throw new Error('Happ crypt5 API returned an unsupported JSON payload')
     }
 
-    const encryptedUrl = await response.text()
-
-    if (!encryptedUrl.startsWith('happ://crypt5/')) {
-        throw new Error('Happ crypt5 API returned an invalid link')
-    }
-
-    return encryptedUrl
+    throw new Error('Happ crypt5 proxy returned an invalid link')
 }
 
 export const InstallationGuideConnector = (props: IProps) => {
@@ -139,6 +123,7 @@ export const InstallationGuideConnector = (props: IProps) => {
         window.location.href,
         subscription.user.shortUuid
     )
+    const happCrypt5ApiUrl = joinURL(subscriptionUrl, 'happ-crypt5')
 
     const formatButtonUrl = (button: TSubscriptionPageButtonConfig, linkTemplate?: string) => {
         const template = linkTemplate ?? getButtonLinkTemplate(button) ?? subscriptionUrl
@@ -156,7 +141,7 @@ export const InstallationGuideConnector = (props: IProps) => {
             return formatButtonUrl(button, linkTemplate)
         }
 
-        const happCrypt5Link = await createHappCrypt5Link(subscriptionUrl)
+        const happCrypt5Link = await createHappCrypt5Link(happCrypt5ApiUrl, subscriptionUrl)
         return formatButtonUrl(button, linkTemplate.replaceAll(HAPP_CRYPT5_TEMPLATE, happCrypt5Link))
     }
 
@@ -208,7 +193,7 @@ export const InstallationGuideConnector = (props: IProps) => {
                 if (!HAPP_CRYPT5_BUTTON_TYPES.has(buttonType) || !formattedUrl) break
 
                 try {
-                    const happCrypt5Link = await createHappCrypt5Link(formattedUrl)
+                    const happCrypt5Link = await createHappCrypt5Link(happCrypt5ApiUrl, formattedUrl)
                     window.open(happCrypt5Link, '_blank')
                 } catch (error) {
                     notifications.show({
