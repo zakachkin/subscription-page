@@ -33,6 +33,7 @@ import classes from './installation-guide.module.css'
 export type TBlockVariant = 'accordion' | 'cards' | 'minimal' | 'timeline'
 
 const HAPP_CRYPT5_BUTTON_TYPES = new Set(['HAPP_CRYPT5_LINK', 'happCrypt5Link'])
+const HAPP_CRYPT5_TEMPLATE = '{{HAPP_CRYPT5_LINK}}'
 const HAPP_CRYPT5_API_URL = 'https://crypto.happ.su/api-v2.php'
 
 interface IProps {
@@ -139,25 +140,46 @@ export const InstallationGuideConnector = (props: IProps) => {
         subscription.user.shortUuid
     )
 
-    const formatButtonUrl = (button: TSubscriptionPageButtonConfig) => {
-        const linkTemplate = getButtonLinkTemplate(button) ?? subscriptionUrl
+    const formatButtonUrl = (button: TSubscriptionPageButtonConfig, linkTemplate?: string) => {
+        const template = linkTemplate ?? getButtonLinkTemplate(button) ?? subscriptionUrl
 
-        return TemplateEngine.formatWithMetaInfo(linkTemplate, {
+        return TemplateEngine.formatWithMetaInfo(template, {
             username: subscription.user.username,
             subscriptionUrl
         })
+    }
+
+    const formatButtonUrlAsync = async (button: TSubscriptionPageButtonConfig) => {
+        const linkTemplate = getButtonLinkTemplate(button) ?? subscriptionUrl
+
+        if (!linkTemplate.includes(HAPP_CRYPT5_TEMPLATE)) {
+            return formatButtonUrl(button, linkTemplate)
+        }
+
+        const happCrypt5Link = await createHappCrypt5Link(subscriptionUrl)
+        return formatButtonUrl(button, linkTemplate.replaceAll(HAPP_CRYPT5_TEMPLATE, happCrypt5Link))
     }
 
     const handleButtonClick = async (button: TSubscriptionPageButtonConfig) => {
         const buttonType = getButtonType(button)
         let formattedUrl: string | undefined
 
-        if (
-            buttonType === 'subscriptionLink' ||
-            buttonType === 'copyButton' ||
-            HAPP_CRYPT5_BUTTON_TYPES.has(buttonType)
-        ) {
-            formattedUrl = formatButtonUrl(button)
+        try {
+            if (
+                buttonType === 'subscriptionLink' ||
+                buttonType === 'copyButton' ||
+                HAPP_CRYPT5_BUTTON_TYPES.has(buttonType)
+            ) {
+                formattedUrl = await formatButtonUrlAsync(button)
+            }
+        } catch (error) {
+            notifications.show({
+                title: 'Happ crypt5 link error',
+                message:
+                    error instanceof Error ? error.message : 'Failed to create Happ crypt5 link',
+                color: 'red'
+            })
+            return
         }
 
         switch (buttonType) {
