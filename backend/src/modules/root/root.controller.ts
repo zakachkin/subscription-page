@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response as ExpressResponse } from 'express';
 
 import {
     BadGatewayException,
@@ -52,7 +52,7 @@ export class RootController {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), HAPP_CRYPT5_TIMEOUT_MS);
 
-        let response: Response;
+        let response: globalThis.Response;
 
         try {
             response = await fetch(HAPP_CRYPT5_API_URL, {
@@ -115,7 +115,7 @@ export class RootController {
     async root(
         @ClientIp() clientIp: string,
         @Req() request: Request,
-        @Res() response: Response,
+        @Res() response: ExpressResponse,
         @Param('shortUuid') shortUuid: string,
         @Param('clientType') clientType: string,
     ) {
