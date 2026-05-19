@@ -11,6 +11,7 @@ import { notifications } from '@mantine/notifications'
 import { useClipboard } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
 import { renderSVG } from 'uqr'
+import { joinURL } from 'ufo'
 
 import { constructSubscriptionUrl } from '@shared/utils/construct-subscription-url'
 import { useSubscription } from '@entities/subscription-info-store'
@@ -24,6 +25,30 @@ interface IProps {
     supportUrl: string
 }
 
+async function createHappLink(apiUrl: string, url: string): Promise<string> {
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+    })
+
+    if (!response.ok) {
+        throw new Error(`Happ link proxy responded with ${response.status}`)
+    }
+
+    const data: unknown = await response.json()
+
+    if (data && typeof data === 'object') {
+        const link = (data as Record<string, unknown>).link
+
+        if (typeof link === 'string' && link.startsWith('happ://')) {
+            return link
+        }
+    }
+
+    throw new Error('Happ link proxy returned an invalid link')
+}
+
 export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
     const { t, baseTranslations } = useTranslation()
     const subscription = useSubscription()
@@ -33,14 +58,31 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
         window.location.href,
         subscription.user.shortUuid
     )
+    const happLinkApiUrl = joinURL(subscriptionUrl, 'happ-crypt5')
 
-    const handleCopy = () => {
+    const getHappLink = async () => createHappLink(happLinkApiUrl, subscriptionUrl)
+
+    const showHappLinkError = (error: unknown) => {
         notifications.show({
-            title: t(baseTranslations.linkCopied),
-            message: t(baseTranslations.linkCopiedToClipboard),
-            color: 'cyan'
+            title: 'Happ link error',
+            message: error instanceof Error ? error.message : 'Failed to create Happ link',
+            color: 'red'
         })
-        clipboard.copy(subscriptionUrl)
+    }
+
+    const handleCopy = async (link?: string) => {
+        try {
+            const linkToCopy = link ?? (await getHappLink())
+
+            notifications.show({
+                title: t(baseTranslations.linkCopied),
+                message: t(baseTranslations.linkCopiedToClipboard),
+                color: 'cyan'
+            })
+            clipboard.copy(linkToCopy)
+        } catch (error) {
+            showHappLinkError(error)
+        }
     }
 
     const renderSupportLink = (supportUrl: string) => {
@@ -78,10 +120,19 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
         )
     }
 
-    const handleGetLink = () => {
+    const handleGetLink = async () => {
         vibrate('tap')
 
-        const subscriptionQrCode = renderSVG(subscriptionUrl, {
+        let happLink: string
+
+        try {
+            happLink = await getHappLink()
+        } catch (error) {
+            showHappLinkError(error)
+            return
+        }
+
+        const subscriptionQrCode = renderSVG(happLink, {
             whiteColor: '#161B22',
             blackColor: '#22d3ee'
         })
@@ -110,7 +161,7 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
                     <Button
                         fullWidth
                         leftSection={<IconCopy />}
-                        onClick={handleCopy}
+                        onClick={() => handleCopy(happLink)}
                         radius="md"
                         variant="light"
                     >
