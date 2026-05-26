@@ -155,7 +155,7 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
                         {t(baseTranslations.scanQrCode)}
                     </Text>
                     <Text c="dimmed" size="sm" ta="center">
-                        {t(baseTranslations.scanQrCodeDescription)}
+                        Простое добавление ключа на другое устройство. Есть и другой вариант: скопируйте ссылку ниже и вставьте в клиент.
                     </Text>
 
                     <Button
