@@ -9,14 +9,19 @@ import {
     ButtonVariant,
     Card,
     Group,
+    Image,
     NativeSelect,
     Stack,
+    Text,
     Title,
     UnstyledButton
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useClipboard } from '@mantine/hooks'
+import { modals } from '@mantine/modals'
+import { IconCopy } from '@tabler/icons-react'
 import { useState } from 'react'
+import { renderSVG } from 'uqr'
 import { joinURL } from 'ufo'
 import clsx from 'clsx'
 
@@ -34,7 +39,9 @@ import classes from './installation-guide.module.css'
 export type TBlockVariant = 'accordion' | 'cards' | 'minimal' | 'timeline'
 
 const HAPP_CRYPT5_BUTTON_TYPES = new Set(['HAPP_CRYPT5_LINK', 'happCrypt5Link'])
+const SHOW_QR_BUTTON_TYPES = new Set(['SHOW_QR', 'showQr', 'showQRCode'])
 const HAPP_CRYPT5_TEMPLATE = '{{HAPP_CRYPT5_LINK}}'
+const SHOW_QR_TEMPLATE = '{{SHOW_QR}}'
 const HAPP_CRYPT5_ERROR_TITLE = {
     en: 'Happ crypt5 link error',
     ru: 'Ошибка ссылки Happ crypt5'
@@ -168,9 +175,66 @@ export const InstallationGuideConnector = (props: IProps) => {
         })
     }
 
+    const openQrModal = async () => {
+        let happCrypt5Link: string
+
+        try {
+            happCrypt5Link = await createHappCrypt5Link(happCrypt5ApiUrl, subscriptionUrl)
+        } catch (error) {
+            showHappCrypt5Error(error)
+            return
+        }
+
+        const qrCode = renderSVG(happCrypt5Link, {
+            whiteColor: '#161B22',
+            blackColor: '#22d3ee'
+        })
+
+        modals.open({
+            centered: true,
+            title: t(baseTranslations.getLink),
+            children: (
+                <Stack align="center">
+                    <Image
+                        src={`data:image/svg+xml;utf8,${encodeURIComponent(qrCode)}`}
+                        style={{ borderRadius: 'var(--mantine-radius-md)' }}
+                    />
+                    <Text c="white" fw={600} size="lg" ta="center">
+                        {t(baseTranslations.scanQrCode)}
+                    </Text>
+                    <Text c="dimmed" size="sm" ta="center">
+                        {t(baseTranslations.scanQrCodeDescription)}
+                    </Text>
+                    <Button
+                        fullWidth
+                        leftSection={<IconCopy />}
+                        onClick={() => {
+                            copy(happCrypt5Link)
+                            notifications.show({
+                                title: t(baseTranslations.linkCopied),
+                                message: t(baseTranslations.linkCopiedToClipboard),
+                                color: 'cyan'
+                            })
+                        }}
+                        radius="md"
+                        variant="light"
+                    >
+                        {t(baseTranslations.copyLink)}
+                    </Button>
+                </Stack>
+            )
+        })
+    }
+
     const handleButtonClick = async (button: TSubscriptionPageButtonConfig) => {
         const buttonType = getButtonType(button)
+        const linkTemplate = getButtonLinkTemplate(button)
         let formattedUrl: string | undefined
+
+        if (SHOW_QR_BUTTON_TYPES.has(buttonType) || linkTemplate === SHOW_QR_TEMPLATE) {
+            await openQrModal()
+            return
+        }
 
         try {
             if (
