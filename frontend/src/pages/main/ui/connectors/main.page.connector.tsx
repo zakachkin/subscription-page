@@ -15,7 +15,7 @@ function osToPlatform(os: string): TSubscriptionPagePlatformKey | undefined {
         case 'ios':
             return 'ios'
         case 'linux':
-            return 'linux'
+            return 'windows'
         case 'macos':
             return 'macos'
         case 'windows':
