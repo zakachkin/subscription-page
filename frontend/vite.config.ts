@@ -34,7 +34,8 @@ export default defineConfig({
         include: ['html-parse-stringify']
     },
     build: {
-        target: 'esnext',
+        target: 'es2018',
+        cssTarget: 'chrome61',
         outDir: 'dist',
         rollupOptions: {
             output: {
@@ -42,23 +43,23 @@ export default defineConfig({
                     groups: [
                         {
                             name: 'icons',
-                            test: /node_modules[\\/](react-icons|@tabler[\\/]icons-react)[\\/]/
+                            test: /node_modules[\\/](react-icons|@tabler[\\/]icons-react)[\\]/
                         },
                         {
                             name: 'date',
-                            test: /node_modules[\\/]dayjs[\\/]/
+                            test: /node_modules[\\/]dayjs[\\]/
                         },
                         {
                             name: 'react',
-                            test: /node_modules[\\/](react|zustand|react-dom|react-router|react-error-boundary)[\\/]/
+                            test: /node_modules[\\/](react|zustand|react-dom|react-router|react-error-boundary)[\\]/
                         },
                         {
                             name: 'mantine',
-                            test: /node_modules[\\/]@mantine[\\/](core|hooks|nprogress|notifications|modals)[\\/]/
+                            test: /node_modules[\\/]@mantine[\\/](core|hooks|nprogress|notifications|modals)[\\]/
                         },
                         {
                             name: 'i18n',
-                            test: /node_modules[\\/](i18next-browser-languagedetector|@remnawave[\\/](backend-contract|subscription-page-types))[\\/]/
+                            test: /node_modules[\\/](i18next-browser-languagedetector|@remnawave[\\/](backend-contract|subscription-page-types))[\\]/
                         }
                     ]
                 }
