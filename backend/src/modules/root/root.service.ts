@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { nanoid } from 'nanoid';
 
 import { Injectable } from '@nestjs/common';
@@ -207,9 +209,19 @@ export class RootService {
                 return;
             }
 
-            const baseSettings = this.subpageConfigService.getBaseSettings(
+            const subpageRawConfig = this.subpageConfigService.getSubscriptionPageRawConfigByUuid(
                 subpageConfig.subpageConfigUuid,
             );
+
+            if (!subpageRawConfig) {
+                this.logger.error(`Subpage config ${subpageConfig.subpageConfigUuid} not found`);
+                res.socket?.destroy();
+                return;
+            }
+
+            this.logger.log(`Using embedded subpage config uuid: ${subpageConfig.subpageConfigUuid}`);
+
+            const baseSettings = subpageRawConfig.baseSettings;
 
             const subscriptionData = subscriptionDataResponse.response;
 
@@ -224,11 +236,22 @@ export class RootService {
                 maxAge: 1_800_000, // 30 minutes
             });
 
-            res.render('index', {
-                metaTitle: baseSettings.metaTitle,
-                metaDescription: baseSettings.metaDescription,
-                panelData: Buffer.from(JSON.stringify(subscriptionData)).toString('base64'),
-            });
+            const panelData = Buffer.from(JSON.stringify(subscriptionData)).toString('base64');
+            const configData = Buffer.from(JSON.stringify(subpageRawConfig)).toString('base64');
+
+            const indexHtmlPath = path.join(process.cwd(), 'frontend', 'index.html');
+            const indexHtml = await readFile(indexHtmlPath, 'utf8');
+
+            const renderedHtml = indexHtml
+                .replace('__PANEL_DATA__', panelData)
+                .replace('__CONFIG_DATA__', configData)
+                .replace(/<title>.*?<\/title>/, `<title>${baseSettings.metaTitle}</title>`)
+                .replace(
+                    /<meta name="description" content=".*?">/,
+                    `<meta name="description" content="${baseSettings.metaDescription}">`,
+                );
+
+            res.status(200).send(renderedHtml);
         } catch (error) {
             this.logger.error(`Error in returnWebpage: ${error}`);
 

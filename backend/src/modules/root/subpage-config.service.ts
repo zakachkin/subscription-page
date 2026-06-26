@@ -119,6 +119,12 @@ export class SubpageConfigService implements OnApplicationBootstrap {
         );
     }
 
+    public getSubscriptionPageRawConfigByUuid(
+        subpageConfigUuid: string | null,
+    ): TSubscriptionPageRawConfig | null {
+        return this.subpageConfigMap.get(this.getFinalSubpageConfigUuid(subpageConfigUuid)) ?? null;
+    }
+
     public getBaseSettings(
         subpageConfigUuid: string | null,
     ): TSubscriptionPageRawConfig['baseSettings'] {

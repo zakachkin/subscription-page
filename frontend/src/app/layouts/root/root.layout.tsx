@@ -17,6 +17,14 @@ import { LoadingScreen } from '@shared/ui'
 
 import classes from './root.module.css'
 
+function parseBase64Json<T>(value: string): T {
+    const binary = atob(value)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    const json = new TextDecoder('utf-8').decode(bytes)
+
+    return JSON.parse(json) as T
+}
+
 export function RootLayout() {
     const subscriptionActions = useSubscriptionInfoStoreActions()
     const configActions = useAppConfigStoreActions()
@@ -26,25 +34,44 @@ export function RootLayout() {
 
     useLayoutEffect(() => {
         const subPageDiv = document.getElementById('sbpg')
+        let hasEmbeddedConfig = false
 
         if (subPageDiv) {
-            const subscriptionUrl = subPageDiv.dataset.panel
+            const panelData = subPageDiv.dataset.panel
+            const configData = subPageDiv.dataset.config
 
-            if (subscriptionUrl) {
+            if (panelData) {
                 try {
-                    const subscription: GetSubscriptionInfoByShortUuidCommand.Response = JSON.parse(
-                        atob(subscriptionUrl)
+                    const decodedData = parseBase64Json<GetSubscriptionInfoByShortUuidCommand.Response>(
+                        panelData
                     )
 
                     subscriptionActions.setSubscriptionInfo({
-                        subscription: subscription.response
+                        subscription: decodedData.response
                     })
                 } catch (error) {
-                    consola.log(error)
-                } finally {
-                    subPageDiv.remove()
+                    consola.error('Failed to parse embedded subscription data:', error)
                 }
             }
+
+            if (configData) {
+                hasEmbeddedConfig = true
+
+                try {
+                    const decodedConfig = parseBase64Json<unknown>(configData)
+                    const parsedConfig = SubscriptionPageRawConfigSchema.safeParse(decodedConfig)
+
+                    if (!parsedConfig.success) {
+                        consola.error('Failed to parse embedded app config:', parsedConfig.error)
+                    } else {
+                        configActions.setConfig(parsedConfig.data)
+                    }
+                } catch (error) {
+                    consola.error('Failed to parse embedded app config:', error)
+                }
+            }
+
+            subPageDiv.remove()
         }
 
         const fetchConfig = async () => {
@@ -70,7 +97,9 @@ export function RootLayout() {
             }
         }
 
-        fetchConfig()
+        if (!hasEmbeddedConfig) {
+            fetchConfig()
+        }
     }, [])
 
     if (!isConfigLoaded || !subscription) {
