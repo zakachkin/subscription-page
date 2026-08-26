@@ -294,7 +294,7 @@ export class AxiosService implements OnModuleInit {
         withClientType: boolean = false,
         clientType?: TRequestTemplateTypeKeys,
     ): Promise<{
-        response: unknown;
+        response: Buffer;
         headers: RawAxiosResponseHeaders | AxiosResponseHeaders;
     } | null> {
         try {
@@ -308,9 +308,10 @@ export class AxiosService implements OnModuleInit {
                 Object.entries(headers).filter(([key]) => !IGNORED_HEADERS.has(key.toLowerCase())),
             );
 
-            const response = await this.axiosInstance.request<unknown>({
+            const response = await this.axiosInstance.request<Buffer>({
                 method: 'GET',
                 url: basePath,
+                responseType: 'arraybuffer',
                 headers: {
                     ...safeHeaders,
                     Accept: '*/*',
