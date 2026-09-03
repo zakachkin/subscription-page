@@ -329,15 +329,37 @@ export class AxiosService implements OnModuleInit {
             };
         } catch (error) {
             if (error instanceof AxiosError) {
-                if (error.response) {
-                    if (error.response.status === 404) {
-                        return null;
+                const status = error.response?.status;
+                const responseHeaders = error.response?.headers;
+
+                let responseBody = '';
+                const responseData = error.response?.data;
+
+                if (responseData !== undefined && responseData !== null) {
+                    if (Buffer.isBuffer(responseData)) {
+                        responseBody = responseData.toString('utf8').slice(0, 2000);
+                    } else if (responseData instanceof ArrayBuffer) {
+                        responseBody = Buffer.from(responseData).toString('utf8').slice(0, 2000);
+                    } else {
+                        try {
+                            responseBody = JSON.stringify(responseData).slice(0, 2000);
+                        } catch {
+                            responseBody = String(responseData).slice(0, 2000);
+                        }
                     }
                 }
 
-                this.logger.error(`Error in GetSubscription Request: ${error.message}`);
+                this.logger.error(
+                    `GetSubscription failed: status=${status ?? 'none'}, ` +
+                        `message=${error.message}, headers=${JSON.stringify(responseHeaders ?? {})}, ` +
+                        `body=${responseBody}`,
+                );
+
+                if (status === 404) {
+                    return null;
+                }
             } else {
-                this.logger.error(`Error in GetSubscription Request: ${error}`);
+                this.logger.error(`Error in GetSubscription Request: ${String(error)}`);
             }
 
             return null;
