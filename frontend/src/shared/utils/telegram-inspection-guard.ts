@@ -90,17 +90,30 @@ export async function installTelegramInspectionGuard() {
         return
     }
 
+    const handleContextMenu = (event: MouseEvent) => {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+    }
+
+    document.addEventListener('contextmenu', handleContextMenu, true)
+
     await loadTelegramSdk()
 
     const webApp = getTelegramWebApp()
 
     if (!webApp || typeof webApp.close !== 'function') {
+        window.addEventListener(
+            'pagehide',
+            () => document.removeEventListener('contextmenu', handleContextMenu, true),
+            { once: true },
+        )
         return
     }
 
     const hasTelegramSession = Boolean(webApp.initData) || hasTelegramLaunchParams()
 
     if (!hasTelegramSession) {
+        document.removeEventListener('contextmenu', handleContextMenu, true)
         return
     }
 
@@ -183,6 +196,7 @@ export async function installTelegramInspectionGuard() {
         () => {
             window.clearInterval(inspectionTimer)
             window.removeEventListener('keydown', handleKeyDown, true)
+            document.removeEventListener('contextmenu', handleContextMenu, true)
         },
         { once: true },
     )
