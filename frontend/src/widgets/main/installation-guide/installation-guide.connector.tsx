@@ -9,14 +9,20 @@ import {
     ButtonVariant,
     Card,
     Group,
+    Image,
     NativeSelect,
     Stack,
+    Text,
     Title,
     UnstyledButton
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useClipboard } from '@mantine/hooks'
+import { modals } from '@mantine/modals'
+import { IconCopy } from '@tabler/icons-react'
 import { useState } from 'react'
+import { renderSVG } from 'uqr'
+import { joinURL } from 'ufo'
 import clsx from 'clsx'
 
 import { constructSubscriptionUrl } from '@shared/utils/construct-subscription-url'
@@ -32,11 +38,63 @@ import classes from './installation-guide.module.css'
 
 export type TBlockVariant = 'accordion' | 'cards' | 'minimal' | 'timeline'
 
+const HAPP_CRYPT5_BUTTON_TYPES = new Set(['HAPP_CRYPT5_LINK', 'happCrypt5Link'])
+const SHOW_QR_BUTTON_TYPES = new Set(['SHOW_QR', 'showQr', 'showQRCode'])
+const HAPP_CRYPT5_TEMPLATE = '{{HAPP_CRYPT5_LINK}}'
+const SHOW_QR_TEMPLATE = '{{SHOW_QR}}'
+const HAPP_CRYPT5_ERROR_TITLE = {
+    en: 'Happ crypt5 link error',
+    ru: 'Ошибка ссылки Happ crypt5'
+}
+const HAPP_CRYPT5_ERROR_MESSAGE = {
+    en: 'Failed to create Happ crypt5 link',
+    ru: 'Не удалось создать ссылку Happ crypt5'
+}
+
 interface IProps {
     BlockRenderer: React.ComponentType<IBlockRendererProps>
     hasPlatformApps: Record<TSubscriptionPagePlatformKey, boolean>
     isMobile: boolean
     platform: TSubscriptionPagePlatformKey | undefined
+}
+
+function getButtonType(button: TSubscriptionPageButtonConfig): string {
+    return String(button.type)
+}
+
+function getButtonLinkTemplate(button: TSubscriptionPageButtonConfig): string | undefined {
+    if ('link' in button && typeof button.link === 'string') {
+        return button.link
+    }
+
+    return undefined
+}
+
+async function createHappCrypt5Link(apiUrl: string, url: string): Promise<string> {
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ url })
+    })
+
+    if (!response.ok) {
+        throw new Error(`Happ crypt5 proxy responded with ${response.status}`)
+    }
+
+    const data: unknown = await response.json()
+
+    if (data && typeof data === 'object') {
+        const payload = data as Record<string, unknown>
+        const link = payload.link
+
+        if (typeof link === 'string' && link.startsWith('happ://crypt5/')) {
+            return link
+        }
+    }
+
+    throw new Error('Happ crypt5 proxy returned an invalid link')
 }
 
 export const InstallationGuideConnector = (props: IProps) => {
@@ -80,18 +138,118 @@ export const InstallationGuideConnector = (props: IProps) => {
         window.location.href,
         subscription.user.shortUuid
     )
+    const happCrypt5ApiUrl = joinURL(subscriptionUrl, 'happ-crypt5')
 
-    const handleButtonClick = (button: TSubscriptionPageButtonConfig) => {
-        let formattedUrl: string | undefined
+    const formatButtonUrl = (button: TSubscriptionPageButtonConfig, linkTemplate?: string) => {
+        const template = linkTemplate ?? getButtonLinkTemplate(button) ?? subscriptionUrl
 
-        if (button.type === 'subscriptionLink' || button.type === 'copyButton') {
-            formattedUrl = TemplateEngine.formatWithMetaInfo(button.link, {
-                username: subscription.user.username,
-                subscriptionUrl
-            })
+        return TemplateEngine.formatWithMetaInfo(template, {
+            username: subscription.user.username,
+            subscriptionUrl
+        })
+    }
+
+    const resolveButtonUrl = async (button: TSubscriptionPageButtonConfig) => {
+        const buttonType = getButtonType(button)
+        const linkTemplate = getButtonLinkTemplate(button) ?? subscriptionUrl
+
+        if (linkTemplate.includes(HAPP_CRYPT5_TEMPLATE)) {
+            const happCrypt5Link = await createHappCrypt5Link(happCrypt5ApiUrl, subscriptionUrl)
+            return formatButtonUrl(button, linkTemplate.replaceAll(HAPP_CRYPT5_TEMPLATE, happCrypt5Link))
         }
 
-        switch (button.type) {
+        const formattedUrl = formatButtonUrl(button, linkTemplate)
+
+        if (HAPP_CRYPT5_BUTTON_TYPES.has(buttonType)) {
+            return await createHappCrypt5Link(happCrypt5ApiUrl, formattedUrl)
+        }
+
+        return formattedUrl
+    }
+
+    const showHappCrypt5Error = (error: unknown) => {
+        notifications.show({
+            title: t(HAPP_CRYPT5_ERROR_TITLE),
+            message: error instanceof Error ? error.message : t(HAPP_CRYPT5_ERROR_MESSAGE),
+            color: 'red'
+        })
+    }
+
+    const openQrModal = async () => {
+        let happCrypt5Link: string
+
+        try {
+            happCrypt5Link = await createHappCrypt5Link(happCrypt5ApiUrl, subscriptionUrl)
+        } catch (error) {
+            showHappCrypt5Error(error)
+            return
+        }
+
+        const qrCode = renderSVG(happCrypt5Link, {
+            whiteColor: '#161B22',
+            blackColor: '#22d3ee'
+        })
+
+        modals.open({
+            centered: true,
+            title: t(baseTranslations.getLink),
+            children: (
+                <Stack align="center">
+                    <Image
+                        src={`data:image/svg+xml;utf8,${encodeURIComponent(qrCode)}`}
+                        style={{ borderRadius: 'var(--mantine-radius-md)' }}
+                    />
+                    <Text c="white" fw={600} size="lg" ta="center">
+                        {t(baseTranslations.scanQrCode)}
+                    </Text>
+                    <Text c="dimmed" size="sm" ta="center">
+                        Простое добавление ключа на другое устройство. Есть и другой вариант: скопируйте ссылку ниже и вставьте в клиент.
+                    </Text>
+                    <Button
+                        fullWidth
+                        leftSection={<IconCopy />}
+                        onClick={() => {
+                            copy(happCrypt5Link)
+                            notifications.show({
+                                title: t(baseTranslations.linkCopied),
+                                message: t(baseTranslations.linkCopiedToClipboard),
+                                color: 'cyan'
+                            })
+                        }}
+                        radius="md"
+                        variant="light"
+                    >
+                        {t(baseTranslations.copyLink)}
+                    </Button>
+                </Stack>
+            )
+        })
+    }
+
+    const handleButtonClick = async (button: TSubscriptionPageButtonConfig) => {
+        const buttonType = getButtonType(button)
+        const linkTemplate = getButtonLinkTemplate(button)
+        let formattedUrl: string | undefined
+
+        if (SHOW_QR_BUTTON_TYPES.has(buttonType) || linkTemplate === SHOW_QR_TEMPLATE) {
+            await openQrModal()
+            return
+        }
+
+        try {
+            if (
+                buttonType === 'subscriptionLink' ||
+                buttonType === 'copyButton' ||
+                HAPP_CRYPT5_BUTTON_TYPES.has(buttonType)
+            ) {
+                formattedUrl = await resolveButtonUrl(button)
+            }
+        } catch (error) {
+            showHappCrypt5Error(error)
+            return
+        }
+
+        switch (buttonType) {
             case 'copyButton': {
                 if (!formattedUrl) return
 
@@ -104,7 +262,7 @@ export const InstallationGuideConnector = (props: IProps) => {
                 break
             }
             case 'external': {
-                window.open(button.link, '_blank')
+                window.open(getButtonLinkTemplate(button), '_blank')
                 break
             }
             case 'subscriptionLink': {
@@ -113,8 +271,12 @@ export const InstallationGuideConnector = (props: IProps) => {
                 window.open(formattedUrl, '_blank')
                 break
             }
-            default:
+            default: {
+                if (!HAPP_CRYPT5_BUTTON_TYPES.has(buttonType) || !formattedUrl) break
+
+                window.open(formattedUrl, '_blank')
                 break
+            }
         }
     }
 
