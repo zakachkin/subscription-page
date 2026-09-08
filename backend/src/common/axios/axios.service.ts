@@ -126,12 +126,12 @@ export class AxiosService implements OnModuleInit {
                     isOk: false,
                     error: error.message,
                 };
-            } else {
-                return {
-                    isOk: false,
-                    error: error,
-                };
             }
+
+            return {
+                isOk: false,
+                error,
+            };
         }
     }
 
@@ -155,17 +155,11 @@ export class AxiosService implements OnModuleInit {
         } catch (error) {
             if (error instanceof AxiosError) {
                 this.logger.error('Error in Axios GetUserByUsername Request:', error.message);
-
-                return {
-                    isOk: false,
-                };
-            } else {
-                this.logger.error('Error in GetUserByUsername Request:', error);
-
-                return {
-                    isOk: false,
-                };
+                return { isOk: false };
             }
+
+            this.logger.error('Error in GetUserByUsername Request:', error);
+            return { isOk: false };
         }
     }
 
@@ -184,7 +178,6 @@ export class AxiosService implements OnModuleInit {
             };
         } catch (error) {
             this.logger.error('Error in GetSubscriptionPageConfigByUuid Request:', error);
-
             return { isOk: false };
         }
     }
@@ -218,10 +211,10 @@ export class AxiosService implements OnModuleInit {
 
                 this.logger.error(`Subpage Config List Request failed: ${error.message}`);
                 return { isOk: false };
-            } else {
-                this.logger.error(`Subpage Config List Request failed: ${error}`);
-                return { isOk: false };
             }
+
+            this.logger.error(`Subpage Config List Request failed: ${error}`);
+            return { isOk: false };
         }
     }
 
@@ -295,12 +288,16 @@ export class AxiosService implements OnModuleInit {
                 basePath += '/' + encodeURIComponent(clientType);
             }
 
+            const safeHeaders = Object.fromEntries(
+                Object.entries(headers).filter(([key]) => !IGNORED_HEADERS.has(key.toLowerCase())),
+            );
+
             const response = await this.axiosInstance.request<Buffer>({
                 method: 'GET',
                 url: basePath,
                 responseType: 'arraybuffer',
                 headers: {
-                    ...headers,
+                    ...safeHeaders,
                     Accept: '*/*',
                     'Cache-Control': 'no-cache, no-store, must-revalidate, private, max-age=0',
                     Pragma: 'no-cache',
@@ -313,20 +310,43 @@ export class AxiosService implements OnModuleInit {
             return {
                 subscription: response.data,
                 headers: Object.fromEntries(
-                    Object.entries(response.headers).filter(([key]) => !IGNORED_HEADERS.has(key)),
+                    Object.entries(response.headers).filter(([key]) =>
+                        !IGNORED_HEADERS.has(key.toLowerCase()),
+                    ),
                 ),
             };
         } catch (error) {
             if (error instanceof AxiosError) {
-                if (error.response) {
-                    if (error.response.status === 404) {
-                        return null;
+                const status = error.response?.status;
+                const responseHeaders = error.response?.headers;
+                const responseData = error.response?.data;
+                let responseBody = '';
+
+                if (responseData !== undefined && responseData !== null) {
+                    if (Buffer.isBuffer(responseData)) {
+                        responseBody = responseData.toString('utf8').slice(0, 2000);
+                    } else if (responseData instanceof ArrayBuffer) {
+                        responseBody = Buffer.from(responseData).toString('utf8').slice(0, 2000);
+                    } else {
+                        try {
+                            responseBody = JSON.stringify(responseData).slice(0, 2000);
+                        } catch {
+                            responseBody = String(responseData).slice(0, 2000);
+                        }
                     }
                 }
 
-                this.logger.error(`Error in GetSubscription Request: ${error.message}`);
+                this.logger.error(
+                    `GetSubscription failed: status=${status ?? 'none'}, ` +
+                        `message=${error.message}, headers=${JSON.stringify(responseHeaders ?? {})}, ` +
+                        `body=${responseBody}`,
+                );
+
+                if (status === 404) {
+                    return null;
+                }
             } else {
-                this.logger.error(`Error in GetSubscription Request: ${error}`);
+                this.logger.error(`Error in GetSubscription Request: ${String(error)}`);
             }
 
             return null;
