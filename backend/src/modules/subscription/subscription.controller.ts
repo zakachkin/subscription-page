@@ -48,19 +48,26 @@ export class SubscriptionController {
             throw new BadRequestException('Invalid subscription URL');
         }
 
-        const subscriptionUrl = new URL(url);
-        const expectedHost = request.get('host');
-        const forwardedProto = request.get('x-forwarded-proto')?.split(',')[0]?.trim();
-        const expectedProtocol = forwardedProto || request.protocol;
-        const expectedOrigin = expectedHost ? `${expectedProtocol}://${expectedHost}` : undefined;
-        const lastPathSegment = subscriptionUrl.pathname.split('/').filter(Boolean).at(-1);
+        let subscriptionUrl: URL;
 
-        if (!expectedOrigin || subscriptionUrl.origin !== expectedOrigin) {
-            throw new BadRequestException('Subscription URL origin mismatch');
+        try {
+            subscriptionUrl = new URL(url);
+        } catch {
+            throw new BadRequestException('Invalid subscription URL');
         }
+
+        const lastPathSegment = subscriptionUrl.pathname.split('/').filter(Boolean).at(-1);
 
         if (lastPathSegment !== shortUuid) {
             throw new BadRequestException('Subscription URL short UUID mismatch');
+        }
+
+        // headerFilterMiddleware removes Host/X-Forwarded-* before this controller runs.
+        // Use the browser Origin header when it is available, but do not require it.
+        const requestOrigin = request.get('origin');
+
+        if (requestOrigin && subscriptionUrl.origin !== requestOrigin) {
+            throw new BadRequestException('Subscription URL origin mismatch');
         }
 
         const subscriptionInfo = await this.axiosService.getSubscriptionInfo(clientIp, shortUuid);
