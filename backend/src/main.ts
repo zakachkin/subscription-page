@@ -105,6 +105,16 @@ async function bootstrap(): Promise<void> {
         }),
     );
 
+    // Keep supporting custom files bind-mounted into /opt/app/frontend
+    // (for example win-launch.html, devices.html and devices.js) without
+    // enabling index.html or extension fallbacks that could shadow Nest routes.
+    app.use(
+        sirv(getAssetsPath(), {
+            etag: false,
+            extensions: [],
+        }),
+    );
+
     app.use(helmet({ contentSecurityPolicy: false }));
 
     app.use(
