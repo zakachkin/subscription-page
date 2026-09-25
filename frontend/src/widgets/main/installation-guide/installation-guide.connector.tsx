@@ -186,8 +186,8 @@ export const InstallationGuideConnector = (props: IProps) => {
         }
 
         const qrCode = renderSVG(happCrypt5Link, {
-            whiteColor: '#161B22',
-            blackColor: '#22d3ee'
+            whiteColor: '#FFFFFF',
+            blackColor: '#000000'
         })
 
         modals.open({
@@ -197,7 +197,7 @@ export const InstallationGuideConnector = (props: IProps) => {
                 <Stack align="center">
                     <Image
                         src={`data:image/svg+xml;utf8,${encodeURIComponent(qrCode)}`}
-                        style={{ borderRadius: 'var(--mantine-radius-md)' }}
+                        style={{ borderRadius: 'var(--mantine-radius-md)', backgroundColor: '#FFFFFF', padding: 12 }}
                     />
                     <Text c="white" fw={600} size="lg" ta="center">
                         {t(baseTranslations.scanQrCode)}
