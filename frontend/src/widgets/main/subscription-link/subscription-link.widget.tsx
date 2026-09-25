@@ -133,8 +133,8 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
         }
 
         const subscriptionQrCode = renderSVG(happLink, {
-            whiteColor: '#161B22',
-            blackColor: '#22d3ee'
+            whiteColor: '#FFFFFF',
+            blackColor: '#000000'
         })
 
         modals.open({
@@ -149,7 +149,7 @@ export const SubscriptionLinkWidget = ({ supportUrl, hideGetLink }: IProps) => {
                 <Stack align="center">
                     <Image
                         src={`data:image/svg+xml;utf8,${encodeURIComponent(subscriptionQrCode)}`}
-                        style={{ borderRadius: 'var(--mantine-radius-md)' }}
+                        style={{ borderRadius: 'var(--mantine-radius-md)', backgroundColor: '#FFFFFF', padding: 12 }}
                     />
                     <Text c="white" fw={600} size="lg" ta="center">
                         {t(baseTranslations.scanQrCode)}
